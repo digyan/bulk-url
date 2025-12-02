@@ -8,17 +8,16 @@
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;500;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Roboto Mono', monospace; }
         /* Custom scrollbar for both areas */
         ::-webkit-scrollbar { width: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 0; }
         ::-webkit-scrollbar-thumb:hover { background: #000; }
 
         /* Visited link styling */
-        /* Note: text-decoration (strikethrough) is often blocked by browsers for security */
         a:visited {
             color: #9ca3af !important; /* gray-400 */
             text-decoration: line-through !important;
@@ -39,7 +38,7 @@
         <!-- Input Area -->
         <textarea 
             id="urlInput" 
-            class="flex-grow w-full p-4 resize-none outline-none text-xs leading-relaxed placeholder-gray-500 bg-white text-black" 
+            class="flex-grow w-full p-4 resize-none outline-none text-xs leading-5 placeholder-gray-500 bg-white text-black" 
             placeholder="Paste URLs here..."
             spellcheck="false"
         ></textarea>
@@ -60,7 +59,7 @@
         </div>
 
         <!-- Output List -->
-        <div id="outputContainer" class="flex-grow p-4 overflow-y-auto text-xs leading-relaxed">
+        <div id="outputContainer" class="flex-grow p-4 overflow-y-auto text-xs leading-5">
             <div class="text-gray-400 mt-1">
                 // Processed links will appear here
             </div>
@@ -109,6 +108,22 @@
             inputCountSpan.textContent = `(${lines})`;
         }
 
+        function deleteUrl(urlToDelete) {
+            const rawText = inputArea.value;
+            const lines = rawText.split(/\r\n|\r|\n/);
+            
+            // Filter out the specific URL (trim matches logic in processUrls)
+            const newLines = lines.filter(line => line.trim() !== urlToDelete);
+            
+            // Update input and state
+            inputArea.value = newLines.join('\n');
+            updateInputCount();
+            localStorage.setItem('urlCleanerInput', inputArea.value);
+            
+            // Re-process to update UI
+            processUrls();
+        }
+
         function processUrls() {
             const rawText = inputArea.value;
             // Clear if empty
@@ -148,7 +163,8 @@
 
             // Create a dense list container
             const list = document.createElement('div');
-            list.className = 'flex flex-col space-y-0.5'; // Very small spacing
+            // Removed space-y-0.5 to rely purely on line-height
+            list.className = 'flex flex-col'; 
 
             urls.forEach((urlStr, index) => {
                 // Ensure clickable link has protocol
@@ -158,7 +174,8 @@
                 }
 
                 const row = document.createElement('div');
-                row.className = `url-row flex items-baseline leading-none`;
+                // Added h-5 to force row height to match line-height (leading-5)
+                row.className = `url-row flex items-center leading-5 group`;
 
                 const number = document.createElement('span');
                 number.className = 'w-8 text-gray-400 text-right mr-3 flex-shrink-0 select-none';
@@ -168,11 +185,19 @@
                 a.href = href;
                 a.target = '_blank';
                 a.rel = 'noopener noreferrer';
-                a.className = `text-black hover:underline truncate`;
+                a.className = `text-black hover:underline truncate flex-1 min-w-0`;
                 a.textContent = urlStr;
+
+                const delBtn = document.createElement('button');
+                delBtn.innerHTML = '&times;';
+                // Light weight (font-light), gray color (text-gray-300), Bold/Black on hover, No BG
+                delBtn.className = 'ml-2 text-gray-300 hover:text-black font-light hover:font-bold px-2 text-lg leading-none transition-colors';
+                delBtn.title = 'Remove from list';
+                delBtn.onclick = () => deleteUrl(urlStr);
 
                 row.appendChild(number);
                 row.appendChild(a);
+                row.appendChild(delBtn);
                 list.appendChild(row);
             });
             
