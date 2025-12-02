@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>URL Filter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Roboto Mono', monospace; }
+        /* Custom scrollbar for both areas */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #555; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #000; }
+
+        /* Visited link styling */
+        .visited-link {
+            text-decoration: line-through;
+            opacity: 0.5;
+        }
+        
+        /* Utility to hide visited rows */
+        .hiding-visited .visited-row {
+            display: none !important;
+        }
+    </style>
+</head>
+<body class="h-screen flex overflow-hidden bg-white text-black">
+
+    <!-- Left Pane: Input -->
+    <div class="w-1/2 flex flex-col border-r border-black">
+        <!-- Toolbar -->
+        <div class="h-12 px-3 border-b border-black flex justify-between items-center bg-white flex-shrink-0">
+            <span class="text-xs font-bold uppercase tracking-wider">
+                Input URLs <span id="inputCount" class="text-gray-500 ml-1">(0)</span>
+            </span>
+            <!-- Button removed, functionality is now reactive -->
+        </div>
+        
+        <!-- Input Area -->
+        <textarea 
+            id="urlInput" 
+            class="flex-grow w-full p-4 resize-none outline-none text-xs leading-relaxed placeholder-gray-500 bg-white text-black" 
+            placeholder="Paste URLs here..."
+            spellcheck="false"
+        ></textarea>
+    </div>
+
+    <!-- Right Pane: Output -->
+    <div class="w-1/2 flex flex-col bg-white">
+        <!-- Toolbar -->
+        <div class="h-12 px-3 border-b border-black flex justify-between items-center bg-white flex-shrink-0 z-10">
+            <span class="text-xs font-bold uppercase tracking-wider">
+                Output URLs <span id="outputCount" class="text-gray-500 ml-1">(0)</span>
+            </span>
+            <div class="flex gap-2">
+                <button onclick="toggleHideVisited()" id="hideVisitedBtn" class="text-xs text-black font-bold border border-black px-3 py-1 rounded-sm hover:bg-black hover:text-white transition-colors uppercase">
+                    Hide Visited
+                </button>
+                <button onclick="copyOutput()" id="copyBtn" class="text-xs text-black font-bold border border-black px-3 py-1 rounded-sm hover:bg-black hover:text-white transition-colors uppercase">
+                    Copy List
+                </button>
+            </div>
+        </div>
+
+        <!-- Output List -->
+        <div id="outputContainer" class="flex-grow p-4 overflow-y-auto text-xs leading-relaxed">
+            <div class="text-gray-400 mt-1">
+                // Processed links will appear here
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const inputArea = document.getElementById('urlInput');
+        const outputContainer = document.getElementById('outputContainer');
+        const inputCountSpan = document.getElementById('inputCount');
+        const outputCountSpan = document.getElementById('outputCount');
+        const hideVisitedBtn = document.getElementById('hideVisitedBtn');
+        
+        // State
+        let visitedUrls = new Set();
+        let isHidingVisited = false;
+
+        // Debounce utility
+        function debounce(func, wait) {
+            let timeout;
+            return function(...args) {
+                const context = this;
+                clearTimeout(timeout);
+                timeout = setTimeout(() => func.apply(context, args), wait);
+            };
+        }
+
+        // Load saved content on startup
+        window.addEventListener('DOMContentLoaded', () => {
+            const savedInput = localStorage.getItem('urlCleanerInput');
+            if (savedInput) {
+                inputArea.value = savedInput;
+                updateInputCount();
+                processUrls(); // Process immediately on load
+            }
+
+            // Load visited URLs
+            const savedVisited = localStorage.getItem('urlCleanerVisited');
+            if (savedVisited) {
+                visitedUrls = new Set(JSON.parse(savedVisited));
+            }
+
+            // Load view preference
+            const savedHidePref = localStorage.getItem('urlCleanerHideVisited');
+            if (savedHidePref === 'true') {
+                isHidingVisited = true;
+                updateHideButtonUI();
+                outputContainer.classList.add('hiding-visited');
+            }
+            
+            // Re-render if we have input but didn't trigger process yet (e.g. visited state changed)
+            if (inputArea.value) processUrls();
+        });
+
+        // Debounced processing function
+        const debouncedProcess = debounce(() => {
+            processUrls();
+            localStorage.setItem('urlCleanerInput', inputArea.value);
+        }, 300);
+
+        inputArea.addEventListener('input', () => {
+            updateInputCount(); // Update count immediately for better UX
+            debouncedProcess(); // Process logic with delay
+        });
+
+        // Event Delegation for link clicks
+        outputContainer.addEventListener('click', (e) => {
+            if (e.target.tagName === 'A') {
+                const url = e.target.textContent; // Use textContent as key
+                visitedUrls.add(url);
+                localStorage.setItem('urlCleanerVisited', JSON.stringify([...visitedUrls]));
+                
+                // Update UI immediately
+                e.target.classList.add('visited-link');
+                e.target.closest('.url-row').classList.add('visited-row');
+            }
+        });
+
+        function toggleHideVisited() {
+            isHidingVisited = !isHidingVisited;
+            localStorage.setItem('urlCleanerHideVisited', isHidingVisited);
+            
+            if (isHidingVisited) {
+                outputContainer.classList.add('hiding-visited');
+            } else {
+                outputContainer.classList.remove('hiding-visited');
+            }
+            updateHideButtonUI();
+        }
+
+        function updateHideButtonUI() {
+            if (isHidingVisited) {
+                hideVisitedBtn.classList.add('bg-black', 'text-white');
+                hideVisitedBtn.innerHTML = 'Show Visited';
+            } else {
+                hideVisitedBtn.classList.remove('bg-black', 'text-white');
+                hideVisitedBtn.innerHTML = 'Hide Visited';
+            }
+        }
+
+        function updateInputCount() {
+            const lines = inputArea.value.split(/\n/).filter(line => line.trim() !== '').length;
+            inputCountSpan.textContent = `(${lines})`;
+        }
+
+        function processUrls() {
+            const rawText = inputArea.value;
+            // Clear if empty
+            if (!rawText.trim()) {
+                outputContainer.innerHTML = '<div class="text-gray-500 text-xs mt-1">// Processed links will appear here</div>';
+                outputCountSpan.textContent = '(0)';
+                return;
+            }
+
+            const lines = rawText.split(/\r\n|\r|\n/);
+            // Use Set for automatic deduplication
+            const validUrls = new Set();
+
+            lines.forEach(line => {
+                const trimmed = line.trim();
+                if (!trimmed) return;
+
+                if (!isRootDomain(trimmed)) {
+                    validUrls.add(trimmed);
+                }
+            });
+
+            // Convert back to array and Sort A-Z
+            const sortedUrls = Array.from(validUrls).sort((a, b) => a.localeCompare(b));
+
+            renderOutput(sortedUrls);
+        }
+
+        function renderOutput(urls) {
+            outputContainer.innerHTML = '';
+            outputCountSpan.textContent = `(${urls.length})`;
+
+            if (urls.length === 0) {
+                outputContainer.innerHTML = '<div class="text-gray-500 text-xs mt-1">// No deep links found.</div>';
+                return;
+            }
+
+            // Create a dense list container
+            const list = document.createElement('div');
+            list.className = 'flex flex-col space-y-0.5'; // Very small spacing
+
+            urls.forEach((urlStr, index) => {
+                // Ensure clickable link has protocol
+                let href = urlStr;
+                if (!href.match(/^[a-zA-Z]+:\/\//)) {
+                    href = 'https://' + href;
+                }
+
+                const isVisited = visitedUrls.has(urlStr);
+
+                const row = document.createElement('div');
+                row.className = `url-row flex items-baseline leading-none ${isVisited ? 'visited-row' : ''}`;
+
+                const number = document.createElement('span');
+                number.className = 'w-8 text-gray-400 text-right mr-3 flex-shrink-0 select-none';
+                number.textContent = `${index + 1}.`;
+
+                const a = document.createElement('a');
+                a.href = href;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                a.className = `text-black hover:underline truncate ${isVisited ? 'visited-link' : ''}`;
+                a.textContent = urlStr;
+
+                row.appendChild(number);
+                row.appendChild(a);
+                list.appendChild(row);
+            });
+            
+            outputContainer.appendChild(list);
+        }
+
+        function isRootDomain(urlStr) {
+            try {
+                let textToParse = urlStr;
+                if (!textToParse.match(/^[a-zA-Z]+:\/\//)) {
+                    textToParse = 'https://' + textToParse;
+                }
+                const url = new URL(textToParse);
+                return (url.pathname === '/' || url.pathname === '') && url.search === '' && url.hash === '';
+            } catch (e) {
+                return false; 
+            }
+        }
+
+        function copyOutput() {
+            // Only copy visible links
+            let linksToCopy = [];
+            
+            const rows = outputContainer.querySelectorAll('.url-row');
+            rows.forEach(row => {
+                // If we are hiding visited and this row is visited, skip it
+                if (isHidingVisited && row.classList.contains('visited-row')) {
+                    return;
+                }
+                const link = row.querySelector('a');
+                if (link) linksToCopy.push(link.textContent);
+            });
+
+            if (linksToCopy.length === 0) return;
+            
+            const textToCopy = linksToCopy.join('\n');
+            navigator.clipboard.writeText(textToCopy).then(() => {
+                const btn = document.getElementById('copyBtn');
+                const originalText = btn.innerHTML;
+                btn.innerHTML = 'COPIED';
+                setTimeout(() => btn.innerHTML = originalText, 1000);
+            });
+        }
+    </script>
+</body>
+</html>
