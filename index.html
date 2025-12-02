@@ -18,14 +18,10 @@
         ::-webkit-scrollbar-thumb:hover { background: #000; }
 
         /* Visited link styling */
-        .visited-link {
-            text-decoration: line-through;
-            opacity: 0.5;
-        }
-        
-        /* Utility to hide visited rows */
-        .hiding-visited .visited-row {
-            display: none !important;
+        /* Note: text-decoration (strikethrough) is often blocked by browsers for security */
+        a:visited {
+            color: #9ca3af !important; /* gray-400 */
+            text-decoration: line-through !important;
         }
     </style>
 </head>
@@ -38,7 +34,6 @@
             <span class="text-xs font-bold uppercase tracking-wider">
                 Input URLs <span id="inputCount" class="text-gray-500 ml-1">(0)</span>
             </span>
-            <!-- Button removed, functionality is now reactive -->
         </div>
         
         <!-- Input Area -->
@@ -58,9 +53,6 @@
                 Output URLs <span id="outputCount" class="text-gray-500 ml-1">(0)</span>
             </span>
             <div class="flex gap-2">
-                <button onclick="toggleHideVisited()" id="hideVisitedBtn" class="text-xs text-black font-bold border border-black px-3 py-1 rounded-sm hover:bg-black hover:text-white transition-colors uppercase">
-                    Hide Visited
-                </button>
                 <button onclick="copyOutput()" id="copyBtn" class="text-xs text-black font-bold border border-black px-3 py-1 rounded-sm hover:bg-black hover:text-white transition-colors uppercase">
                     Copy List
                 </button>
@@ -80,12 +72,7 @@
         const outputContainer = document.getElementById('outputContainer');
         const inputCountSpan = document.getElementById('inputCount');
         const outputCountSpan = document.getElementById('outputCount');
-        const hideVisitedBtn = document.getElementById('hideVisitedBtn');
         
-        // State
-        let visitedUrls = new Set();
-        let isHidingVisited = false;
-
         // Debounce utility
         function debounce(func, wait) {
             let timeout;
@@ -104,23 +91,6 @@
                 updateInputCount();
                 processUrls(); // Process immediately on load
             }
-
-            // Load visited URLs
-            const savedVisited = localStorage.getItem('urlCleanerVisited');
-            if (savedVisited) {
-                visitedUrls = new Set(JSON.parse(savedVisited));
-            }
-
-            // Load view preference
-            const savedHidePref = localStorage.getItem('urlCleanerHideVisited');
-            if (savedHidePref === 'true') {
-                isHidingVisited = true;
-                updateHideButtonUI();
-                outputContainer.classList.add('hiding-visited');
-            }
-            
-            // Re-render if we have input but didn't trigger process yet (e.g. visited state changed)
-            if (inputArea.value) processUrls();
         });
 
         // Debounced processing function
@@ -133,41 +103,6 @@
             updateInputCount(); // Update count immediately for better UX
             debouncedProcess(); // Process logic with delay
         });
-
-        // Event Delegation for link clicks
-        outputContainer.addEventListener('click', (e) => {
-            if (e.target.tagName === 'A') {
-                const url = e.target.textContent; // Use textContent as key
-                visitedUrls.add(url);
-                localStorage.setItem('urlCleanerVisited', JSON.stringify([...visitedUrls]));
-                
-                // Update UI immediately
-                e.target.classList.add('visited-link');
-                e.target.closest('.url-row').classList.add('visited-row');
-            }
-        });
-
-        function toggleHideVisited() {
-            isHidingVisited = !isHidingVisited;
-            localStorage.setItem('urlCleanerHideVisited', isHidingVisited);
-            
-            if (isHidingVisited) {
-                outputContainer.classList.add('hiding-visited');
-            } else {
-                outputContainer.classList.remove('hiding-visited');
-            }
-            updateHideButtonUI();
-        }
-
-        function updateHideButtonUI() {
-            if (isHidingVisited) {
-                hideVisitedBtn.classList.add('bg-black', 'text-white');
-                hideVisitedBtn.innerHTML = 'Show Visited';
-            } else {
-                hideVisitedBtn.classList.remove('bg-black', 'text-white');
-                hideVisitedBtn.innerHTML = 'Hide Visited';
-            }
-        }
 
         function updateInputCount() {
             const lines = inputArea.value.split(/\n/).filter(line => line.trim() !== '').length;
@@ -222,10 +157,8 @@
                     href = 'https://' + href;
                 }
 
-                const isVisited = visitedUrls.has(urlStr);
-
                 const row = document.createElement('div');
-                row.className = `url-row flex items-baseline leading-none ${isVisited ? 'visited-row' : ''}`;
+                row.className = `url-row flex items-baseline leading-none`;
 
                 const number = document.createElement('span');
                 number.className = 'w-8 text-gray-400 text-right mr-3 flex-shrink-0 select-none';
@@ -235,7 +168,7 @@
                 a.href = href;
                 a.target = '_blank';
                 a.rel = 'noopener noreferrer';
-                a.className = `text-black hover:underline truncate ${isVisited ? 'visited-link' : ''}`;
+                a.className = `text-black hover:underline truncate`;
                 a.textContent = urlStr;
 
                 row.appendChild(number);
@@ -265,10 +198,6 @@
             
             const rows = outputContainer.querySelectorAll('.url-row');
             rows.forEach(row => {
-                // If we are hiding visited and this row is visited, skip it
-                if (isHidingVisited && row.classList.contains('visited-row')) {
-                    return;
-                }
                 const link = row.querySelector('a');
                 if (link) linksToCopy.push(link.textContent);
             });
